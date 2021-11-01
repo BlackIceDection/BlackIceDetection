@@ -1,0 +1,18 @@
+{
+  "kv": {
+    "fileName": "20211101T170049Z.bolt",
+    "size": 49152
+  },
+  "files": [
+    {
+      "organizationID": "ba83a51093aaeb90",
+      "organizationName": "Kaindorf",
+      "bucketID": "a117b3737f9cc402",
+      "bucketName": "BidBucket",
+      "shardID": 1,
+      "fileName": "20211101T170049Z.s1.tar.gz",
+      "size": 371,
+      "lastModified": "2021-11-01T17:00:50.036406777Z"
+    }
+  ]
+}
