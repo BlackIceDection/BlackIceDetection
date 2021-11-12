@@ -1,12 +1,18 @@
 package at.kaindorf.mqtt;
 
+import at.kaindorf.lua.LuaJ;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
-public class MqttExample{
+import java.util.HashMap;
+
+public class MqttSender{
+	
+	// instance
+	private static MqttSender instance = null;
 	
 	// client variables
 	private String clientId, clientBroker;
@@ -18,10 +24,18 @@ public class MqttExample{
 	// connection properties
 	private MqttConnectOptions connOpts;
 	
-	public MqttExample(){
-		// setter
-		this.clientId = "Nico";
-		this.clientBroker = "tcp://192.168.0.101:1883";
+	public static MqttSender getInstance(){
+		if(instance == null) instance = new MqttSender();
+		return instance;
+	}
+	
+	public MqttSender(){
+		// init script
+		LuaJ.executeLuaScript("mqtt.lua", new HashMap<String, Object>(){
+			{
+				put("mqtt", instance);
+			}
+		});
 		
 		// 
 		memPers = new MemoryPersistence();
@@ -81,6 +95,46 @@ public class MqttExample{
 	
 	public boolean isClientCreated(){
 		return client != null;
+	}
+	
+	public String getClientId(){
+		return clientId;
+	}
+	
+	public void setClientId(String clientId){
+		this.clientId = clientId;
+	}
+	
+	public String getClientBroker(){
+		return clientBroker;
+	}
+	
+	public void setClientBroker(String clientBroker){
+		this.clientBroker = clientBroker;
+	}
+	
+	public MqttClient getClient(){
+		return client;
+	}
+	
+	public void setClient(MqttClient client){
+		this.client = client;
+	}
+	
+	public MemoryPersistence getMemPers(){
+		return memPers;
+	}
+	
+	public void setMemPers(MemoryPersistence memPers){
+		this.memPers = memPers;
+	}
+	
+	public MqttConnectOptions getConnOpts(){
+		return connOpts;
+	}
+	
+	public void setConnOpts(MqttConnectOptions connOpts){
+		this.connOpts = connOpts;
 	}
 	
 }

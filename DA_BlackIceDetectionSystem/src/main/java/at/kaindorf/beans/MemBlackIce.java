@@ -1,4 +1,4 @@
-package at.kaindorf.pojo;
+package at.kaindorf.beans;
 
 import com.influxdb.annotations.Column;
 import com.influxdb.annotations.Measurement;

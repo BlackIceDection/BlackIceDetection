@@ -2,47 +2,21 @@ package at.kaindorf;
 
 import at.kaindorf.db.Database;
 import at.kaindorf.db.DatabaseAccess;
-import at.kaindorf.mqtt.MqttExample;
+import at.kaindorf.mqtt.MqttSender;
 import com.influxdb.client.domain.WritePrecision;
 import com.influxdb.client.write.Point;
 import com.influxdb.query.FluxTable;
-import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
 public class Main{
 	
-	public static void main(String[] args){
-		MqttExample mqtt = new MqttExample();
-		
-		try{
-			mqtt.connect(null);
-			
-			// create test message
-			String topic = "Schwarzi";
-			String content = ":D";
-			int qos = 0;
-			
-			MqttMessage message = new MqttMessage(content.getBytes());
-			message.setQos(qos);
-			
-			// send message
-			mqtt.sendMessage(topic, message);
-			
-			// disconnect client
-			mqtt.disconnect();
-		}
-		catch(MqttException mqE){
-			mqE.printStackTrace();
-		}
-	}
-	
-	private static void test_db(){
+	public static void main(String[] args) throws Exception{
 		Database db = Database.getInstance();
+		MqttSender mqtt = new MqttSender();
 		
 		Scanner scan = new Scanner(System.in);
 		
@@ -50,7 +24,7 @@ public class Main{
 		while(true){
 			System.out.println(" (1) Print table data");
 			System.out.println(" (2) Add data entry");
-			System.out.println("");
+			System.out.println(" (3) Send MQTT Message");
 			
 			System.out.println(" (9) Exit");
 			
@@ -110,6 +84,34 @@ public class Main{
 					
 					DatabaseAccess.writeDataPoint(point);
 					break;
+					
+				case 3:
+					mqtt.connect(null);
+					
+					// create test message
+					System.out.print("Topic: "); // Schwarzi
+					String topic = scan.nextLine().trim();
+					System.out.print("Message: ");
+					String content = scan.nextLine().trim();
+					System.out.print("QOS: "); // 0
+					int qos;
+					try{
+						qos = Integer.parseInt(scan.nextLine().trim());
+					}
+					catch(NumberFormatException nfE){
+						System.out.println("Invalid input, try again.");
+						continue;
+					}
+					
+					MqttMessage message = new MqttMessage(content.getBytes());
+					message.setQos(qos);
+					
+					// send message
+					mqtt.sendMessage(topic, message);
+					
+					// disconnect client
+					mqtt.disconnect();
+					break;
 				
 				case 9:
 					break LOOP;
@@ -121,6 +123,13 @@ public class Main{
 		}
 		
 		db.close();
+	}
+	
+	/**
+	 * Tests DB connection by reading and writing data to InfluxDB.
+	 */
+	private static void test_db(){
+		
 	}
 	
 }
