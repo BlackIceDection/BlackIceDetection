@@ -1,24 +1,36 @@
 package at.kaindorf.db;
 
+import at.kaindorf.Main;
+import at.kaindorf.beans.ConnectionClass;
 import at.kaindorf.lua.LuaJ;
 import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.InfluxDBClientFactory;
+import com.influxdb.client.WriteApi;
+import com.influxdb.client.domain.WritePrecision;
+import com.influxdb.client.write.Point;
+import com.influxdb.query.FluxTable;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 
+import javax.swing.*;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * This class handles everything about the database itself and its connection.
- * SQL statements however, are handled by the external class {@link at.kaindorf.db.DatabaseAccess}.
+ * It's also responsible for reading/writing InfluxDB data.
  * 
  * @author Nico Baumann
  */
-public class Database{
+@Data
+@EqualsAndHashCode(callSuper = false)
+public class Database extends ConnectionClass{
 	
 	// instance handle
 	private static Database instance = null;
 	
 	// check for soft reload
-	public boolean firstRun = true;
+	public static boolean firstRun = true;
 	
 	// database client
 	private InfluxDBClient client;
@@ -47,111 +59,117 @@ public class Database{
 	public Database(){
 		// execute boot script containing various (especially database-related)
 		// instructions needed for starting up
-		reloadStartupScript();
-		
-		// connect to database
-		client = InfluxDBClientFactory.create(url, token.toCharArray());
+		reset();
 	}
 	
 	/**
-	 * Reloads the "boot.lua" script on demand, just in case something goes 
-	 * horribly wrong and the application needs to restart.
+	 * Establishes connection to InfluxDB.
 	 */
-	public void reloadStartupScript(){
+	public void connect(){
 		try{
-			LuaJ.executeLuaScript("boot.lua", new HashMap<String, Object>(){
-				{
-					put("database", instance);
-				}
-			});
+			client = InfluxDBClientFactory.create(url, token.toCharArray());
 		}
 		catch(Exception e){
-			System.out.println("FATAL: Failed to execute boot script, aborting...");
-			System.exit(1);
+			if(Main.debugWindow)
+				JOptionPane.showMessageDialog(
+						null,
+						"Failed to connect to InfluxDB.",
+						"InfluxDB Connection Error",
+						JOptionPane.ERROR_MESSAGE
+				);
+			
+			System.out.println("ERROR: Failed to connect to InfluxDB.");
+			e.printStackTrace();
 		}
 	}
 	
 	/**
 	 * Closes the database connection and frees resources.
 	 */
-	public void close(){
-		client.close();
+	public void disconnect(){
+		try{
+			if(client != null)
+				client.close();
+		}
+		catch(Exception e){
+			if(Main.debugWindow)
+				JOptionPane.showMessageDialog(
+						null,
+						"Failed to close connection to InfluxDB.",
+						"InfluxDB Connection Error",
+						JOptionPane.ERROR_MESSAGE
+				);
+			
+			System.out.println("ERROR: Unable to close InfluxDB connection.");
+			e.printStackTrace();
+		}
 	}
 	
 	/**
-	 * Resets the entire Backend.
+	 * Reloads Lua scripts.
 	 */
-	public void resetAll(){
-		
+	public void reload(){
+		LuaJ.executeLuaScript("db.lua", new HashMap<String, Object>(){
+			{
+				put("database", instance);
+			}
+		});
 	}
 	
 	/**
-	 * Resets the Database only (not the database itself; just resets all variables and reconnects).
+	 * Disconnects from DB and resets all variables.
 	 */
 	public void reset(){
+		disconnect();
 		
+		client = null;
+		url = username = password = token = bucket = org = "NaN";
 	}
 	
 	
 	
 	////////////////////////////////////////////////////////////////////////////
-	// GETTER & SETTER
+	// COMMUNICATION
 	////////////////////////////////////////////////////////////////////////////
 	
-	public InfluxDBClient getClient(){
-		return client;
+	/**
+	 * We have the following data:
+	 *  - Air Pressure (Field Key) - type Float
+	 *  - Temperature (Field Key) - type Float
+	 *  - Humidity (Field Key) - type Float
+	 *  - Light (Field Key) - type Float
+	 */
+	
+	/**
+	 * Writes data to Influx directly via InfluxDB's Line Protocol.
+	 *
+	 * @param in The line protocol data
+	 */
+	public void writeLineProtocol(String in){
+		try(WriteApi wapi = client.getWriteApi()){
+			wapi.writeRecord(bucket, org, WritePrecision.NS, in);
+		}
 	}
 	
-	public void setClient(InfluxDBClient client){
-		this.client = client;
+	/**
+	 * Writes data to Influx via Data Point. (Preferred)
+	 *
+	 * @param point The data point
+	 */
+	public void writeDataPoint(Point point){
+		try(WriteApi wapi = client.getWriteApi()){
+			wapi.writePoint(bucket, org, point);
+		}
 	}
 	
-	public String getUrl(){
-		return url;
-	}
-	
-	public void setUrl(String url){
-		this.url = url;
-	}
-	
-	public String getUsername(){
-		return username;
-	}
-	
-	public void setUsername(String username){
-		this.username = username;
-	}
-	
-	public String getPassword(){
-		return password;
-	}
-	
-	public void setPassword(String password){
-		this.password = password;
-	}
-	
-	public String getToken(){
-		return token;
-	}
-	
-	public void setToken(String token){
-		this.token = token;
-	}
-	
-	public String getBucket(){
-		return bucket;
-	}
-	
-	public void setBucket(String bucket){
-		this.bucket = bucket;
-	}
-	
-	public String getOrg(){
-		return org;
-	}
-	
-	public void setOrg(String org){
-		this.org = org;
+	/**
+	 * Executes InfluxQL query and returns its result.
+	 * @param query The InfluxQL statement
+	 * @return The query result
+	 */
+	public List<FluxTable> executeQuery(String query){
+		//List<FluxTable> tables = db.getClient().getQueryApi().query(query, db.getOrg());
+		return client.getQueryApi().query(query, org);
 	}
 	
 }

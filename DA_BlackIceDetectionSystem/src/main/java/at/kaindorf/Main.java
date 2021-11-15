@@ -1,22 +1,145 @@
 package at.kaindorf;
 
 import at.kaindorf.db.Database;
-import at.kaindorf.db.DatabaseAccess;
-import at.kaindorf.mqtt.MqttSender;
-import com.influxdb.client.domain.WritePrecision;
-import com.influxdb.client.write.Point;
-import com.influxdb.query.FluxTable;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import at.kaindorf.lua.LuaJ;
+import at.kaindorf.mqtt.Mqtt;
+import at.kaindorf.ui.DebugGUI;
+import lombok.Data;
+import org.eclipse.paho.client.mqttv3.MqttException;
 
-import java.time.Instant;
+import javax.swing.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Scanner;
 
+@Data
 public class Main{
 	
+	// instance for Lua only
+	public static Main instance;
+	
+	// whether it has already loaded the main lua script
+	public static boolean firstRun = true;
+	
+	// whether to show the debugging window
+	public static boolean debugWindow;
+	// the actual debugging window
+	public static DebugGUI debugFrame = null;
+	
+	// Lua scripts that should be executed after 'boot.lua'
+	private String[] chainScripts;
+	
+	// InfluxDB connection instance
+	private static Database db;
+	// MQTT client/sender/receiver instance
+	private static Mqtt mqtt;
+	
 	public static void main(String[] args) throws Exception{
+		instance = new Main();
+		
+		// just use the reload method to initialize everything needed
+		instance.reload();
+	}
+	
+	
+	
+	/**
+	 * Executes all Lua scripts needed for startup and instantiates all necessary variables. 
+	 */
+	public void reload(){
+		try{
+			System.out.println("executing 'boot.lua'...");
+			// execute boot script
+			LuaJ.executeLuaScript("boot.lua", new HashMap<String, Object>(){
+				{
+					put("main", instance);
+				}
+			});
+			System.out.println("success!");
+			
+			// set up Influx
+			System.out.println("creating database instance...");
+			db = Database.getInstance();
+			// set up MQTT
+			System.out.println("creating MQTT instance...");
+			mqtt = Mqtt.getInstance();
+			
+			System.out.println("adding instances to Lua object map...");
+			// map containing all the objects to parse to Lua
+			HashMap<String, Object> luaObjects = new HashMap<String, Object>(){
+				{
+					put("database", db);
+					put("mqtt", mqtt);
+				}	
+			};
+			;
+			// list containing all Lua scripts to execute after 'boot.lua'
+			List<String> scripts = new ArrayList<>(Arrays.asList(chainScripts));
+			
+			// set up debugging window if necessary and append its instance to the Lua object map
+			// and execute debugging window's script as well
+			if(debugWindow){
+				System.out.println("setting up debug window...");
+				debugFrame = new DebugGUI();
+				
+				luaObjects.put("frame", debugFrame);
+				scripts.add("gui.lua");
+			}
+			
+			
+			for(String script : scripts){
+				System.out.format("executing script '%s'... ", script);
+				LuaJ.executeLuaScript(script, luaObjects);
+				System.out.println("success!");
+			}
+		}
+		catch(Exception e){
+			if(debugWindow)
+				JOptionPane.showMessageDialog(
+						null,
+						"Failed to execute startup scripts, aborting...",
+						"Setup Error",
+						JOptionPane.ERROR_MESSAGE
+				);
+			
+			System.out.println("FATAL: Failed to execute boot scripts, aborting...");
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+	
+	/**
+	 * Closes all connections and clears variables before shutting down/resetting.
+	 */
+	public static void reset(){
+		// disconnect database if necessary
+		if(db != null){
+			db.disconnect();
+		}
+		
+		// disable MQTT if necessary
+		if(mqtt != null){
+			mqtt.disconnect();
+		}
+		
+		// close debugging window if necessary
+		if(debugFrame != null){
+			debugFrame.dispose();
+		}
+		
+		// reset instances
+		db = null;
+		mqtt = null;
+		debugFrame = null;
+	}
+	
+	/**
+	 * Tests DB connection by reading and writing data to InfluxDB.
+	 *//*
+	private static void test_db(){
 		Database db = Database.getInstance();
-		MqttSender mqtt = new MqttSender();
+		Mqtt mqtt = new Mqtt();
 		
 		Scanner scan = new Scanner(System.in);
 		
@@ -84,7 +207,7 @@ public class Main{
 					
 					DatabaseAccess.writeDataPoint(point);
 					break;
-					
+				
 				case 3:
 					mqtt.connect(null);
 					
@@ -123,13 +246,6 @@ public class Main{
 		}
 		
 		db.close();
-	}
-	
-	/**
-	 * Tests DB connection by reading and writing data to InfluxDB.
-	 */
-	private static void test_db(){
-		
-	}
+	}*/
 	
 }
