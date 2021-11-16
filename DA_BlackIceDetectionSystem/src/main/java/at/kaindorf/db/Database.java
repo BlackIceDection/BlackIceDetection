@@ -1,7 +1,5 @@
 package at.kaindorf.db;
 
-import at.kaindorf.Main;
-import at.kaindorf.beans.ConnectionClass;
 import at.kaindorf.lua.LuaJ;
 import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.InfluxDBClientFactory;
@@ -10,9 +8,7 @@ import com.influxdb.client.domain.WritePrecision;
 import com.influxdb.client.write.Point;
 import com.influxdb.query.FluxTable;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
-import javax.swing.*;
 import java.util.HashMap;
 import java.util.List;
 
@@ -23,8 +19,7 @@ import java.util.List;
  * @author Nico Baumann
  */
 @Data
-@EqualsAndHashCode(callSuper = false)
-public class Database extends ConnectionClass{
+public class Database{
 	
 	// instance handle
 	private static Database instance = null;
@@ -65,50 +60,24 @@ public class Database extends ConnectionClass{
 	/**
 	 * Establishes connection to InfluxDB.
 	 */
-	public void connect(){
-		try{
-			client = InfluxDBClientFactory.create(url, token.toCharArray());
-		}
-		catch(Exception e){
-			if(Main.debugWindow)
-				JOptionPane.showMessageDialog(
-						null,
-						"Failed to connect to InfluxDB.",
-						"InfluxDB Connection Error",
-						JOptionPane.ERROR_MESSAGE
-				);
-			
-			System.out.println("ERROR: Failed to connect to InfluxDB.");
-			e.printStackTrace();
-		}
+	public void connect() throws Exception{
+		client = InfluxDBClientFactory.create(url, token.toCharArray());
 	}
 	
 	/**
 	 * Closes the database connection and frees resources.
 	 */
-	public void disconnect(){
-		try{
-			if(client != null)
-				client.close();
-		}
-		catch(Exception e){
-			if(Main.debugWindow)
-				JOptionPane.showMessageDialog(
-						null,
-						"Failed to close connection to InfluxDB.",
-						"InfluxDB Connection Error",
-						JOptionPane.ERROR_MESSAGE
-				);
-			
-			System.out.println("ERROR: Unable to close InfluxDB connection.");
-			e.printStackTrace();
-		}
+	public void disconnect() throws Exception{
+		if(client != null)
+			client.close();
+		else
+			throw new RuntimeException("No client present");
 	}
 	
 	/**
 	 * Reloads Lua scripts.
 	 */
-	public void reload(){
+	public void reload() throws Exception{
 		LuaJ.executeLuaScript("db.lua", new HashMap<String, Object>(){
 			{
 				put("database", instance);
@@ -117,13 +86,28 @@ public class Database extends ConnectionClass{
 	}
 	
 	/**
-	 * Disconnects from DB and resets all variables.
+	 * Resets all variables
 	 */
 	public void reset(){
-		disconnect();
-		
 		client = null;
 		url = username = password = token = bucket = org = "NaN";
+	}
+	
+	public String getConnectionString(boolean html){
+		if(client != null){
+			if(!html)
+				return String.format(
+						"URL: %s\nUser:%s\nBucket:%s, Org: %s",
+						url, username, bucket, org
+				);
+			else
+				return String.format(
+						"<html>URL: %s<br/><br/>User: %s<br/><br/>Bucket: %s<br/><br/>Org: %s</html>",
+						url, username, bucket, org
+				);
+		}
+		
+		return "Not connected.";
 	}
 	
 	

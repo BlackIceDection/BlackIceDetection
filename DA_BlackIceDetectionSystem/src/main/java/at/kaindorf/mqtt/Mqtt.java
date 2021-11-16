@@ -1,22 +1,18 @@
 package at.kaindorf.mqtt;
 
 import at.kaindorf.Main;
-import at.kaindorf.beans.ConnectionClass;
 import at.kaindorf.lua.LuaJ;
+import at.kaindorf.ui.DebugGUI;
+import com.influxdb.client.domain.Run;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 import javax.swing.*;
 import java.util.HashMap;
 
 @Data
-@EqualsAndHashCode(callSuper = false)
-public class Mqtt extends ConnectionClass{
+public class Mqtt implements MqttCallback{
 	
 	// instance
 	private static Mqtt instance = null;
@@ -35,6 +31,14 @@ public class Mqtt extends ConnectionClass{
 	// connection properties
 	private MqttConnectOptions connOpts;
 	
+	// quality of service of messages
+	private int qos;
+	
+	// general topic
+	private String topic;
+	
+	////////////////////////////////////////////////////////////////////////////
+	
 	/**
 	 * Creates and returns an instance of this class.
 	 * @return This instance.
@@ -45,7 +49,7 @@ public class Mqtt extends ConnectionClass{
 	}
 	
 	public Mqtt(){
-		// 
+		//
 		memPers = new MemoryPersistence();
 		
 		// initialize connection options
@@ -57,123 +61,63 @@ public class Mqtt extends ConnectionClass{
 	/**
 	 * Set up MQTT connection.
 	 */
-	public void connect(){
+	public void connect() throws MqttException, RuntimeException{
 		// initialize client if it isn't already
-		if(client != null){
-			try{
-				client = new MqttClient(this.clientBroker, this.clientId, memPers);
-			}
-			catch(MqttException mqE){
-				if(Main.debugWindow)
-					JOptionPane.showMessageDialog(
-							null,
-							"Failed to create MQTT Client.",
-							"MQTT Client Error",
-							JOptionPane.ERROR_MESSAGE
-					);
-				
-				System.out.println("ERROR: Failed to create MQTT Client.");
-				mqE.printStackTrace();
-			}
+		if(client == null){
+			client = new MqttClient(this.clientBroker, this.clientId, memPers);
 		}
 		
-		try{
-			// check if client exists
-			if(client != null){
-				// connect to client with default options
-				client.connect(connOpts);
-			}
-			else{
-				if(Main.debugWindow)
-					JOptionPane.showMessageDialog(
-							null,
-							"Failed to establish MQTT connection: The MQTT client doesn't exist.",
-							"MQTT Connection Error",
-							JOptionPane.ERROR_MESSAGE
-					);
-				System.out.println("ERROR: Unable to establish connection, MQTT client doesn't exist.");
-			}
-		}
-		catch(MqttException mE){
-			if(Main.debugWindow)
-				JOptionPane.showMessageDialog(
-						null,
-						"Failed to establish MQTT connection.",
-						"MQTT Connection Error",
-						JOptionPane.ERROR_MESSAGE
-				);
+		// check if client exists
+		if(client != null){
+			// set listener for client
+			client.setCallback(this);
 			
-			System.out.println("ERROR: Failed to establish MQTT exception.");
-			mE.printStackTrace();
+			// connect to client with default options
+			client.connect(connOpts);
 		}
+		else{
+			throw new RuntimeException("MQTT client doesn't exist");
+		}
+		
+		// subscribe to message receiver
+		client.subscribe(topic, qos);
 	}
 	/**
 	 * Setup MQTT connection, this time with special settings.
 	 * @param opts Connection options.
 	 */
-	public void connect(MqttConnectOptions opts){
-		try{
-			// check if client exists
-			if(client != null){
-				// connect to client with special options
-				client.connect(opts);
-			}
-			else{
-				if(Main.debugWindow)
-					JOptionPane.showMessageDialog(
-							null,
-							"Failed to establish MQTT connection: The MQTT client doesn't exist.",
-							"MQTT Connection Error",
-							JOptionPane.ERROR_MESSAGE
-					);
-				
-				System.out.println("ERROR: Unable to establish connection, MQTT client doesn't exist.");
-			}
+	public void connect(MqttConnectOptions opts) throws Exception{
+		// initialize client if it isn't already
+		if(client == null){
+			client = new MqttClient(this.clientBroker, this.clientId, memPers);
 		}
-		catch(MqttException mE){
-			if(Main.debugWindow)
-				JOptionPane.showMessageDialog(
-						null,
-						"Failed to establish MQTT connection. Check your custom connection options.",
-						"MQTT Connection Error",
-						JOptionPane.ERROR_MESSAGE
-				);
+		
+		// check if client exists
+		if(client != null){
+			// set listener for client
+			client.setCallback(this);
 			
-			System.out.println("ERROR: Failed to establish MQTT connection. Check the custom connection options.");
-			mE.printStackTrace();
+			// connect to client with special options
+			client.connect(opts);
 		}
+		else{
+			throw new RuntimeException("MQTT client doesn't exist");
+		}
+		
+		// subscribe to message receiver
+		client.subscribe(topic, qos);
 	}
 	
 	/**
 	 * Closes MQTT connection.
 	 */
-	public void disconnect(){
-		try{
-			if(client != null){
-				client.disconnect();
-				client.close();
-			}
-			else{
-				JOptionPane.showMessageDialog(
-						null,
-						"Failed to close MQTT connection: MQTT client doesn't exist.",
-						"MQTT Connection Error",
-						JOptionPane.ERROR_MESSAGE
-				);
-				
-				System.out.println("ERROR: Unable to disconnect, MQTT client doesn't exist.");
-			}
+	public void disconnect() throws MqttException, RuntimeException{
+		if(client != null){
+			client.disconnect();
+			client.close();
 		}
-		catch(MqttException mE){
-			JOptionPane.showMessageDialog(
-					null,
-					"Failed to close MQTT connection.",
-					"MQTT Connection Error",
-					JOptionPane.ERROR_MESSAGE
-			);
-			
-			System.out.println("ERROR: Failed to close connection.");
-			mE.printStackTrace();
+		else{
+			throw new RuntimeException("MQTT client doesn't exist");
 		}
 	}
 	
@@ -189,11 +133,9 @@ public class Mqtt extends ConnectionClass{
 	}
 	
 	/**
-	 * Closes connection and resets all variables.
+	 * Resets all variables.
 	 */
 	public void reset(){
-		disconnect();
-		
 		client = null;
 		memPers = null;
 		connOpts = null;
@@ -201,31 +143,42 @@ public class Mqtt extends ConnectionClass{
 		clientId = clientBroker = null;
 	}
 	
+	public String getConnectionString(boolean html){
+		if(client != null){
+			if(!html)
+				return String.format(
+						"Client ID: %s\nBroker URL:%s",
+						clientId, clientBroker
+				);
+			else
+				return String.format(
+						"<html>Client ID: %s<br/><br/>Broker URL:%s</html>",
+						clientId, clientBroker
+				);
+		}
+		
+		return "Not connected.";
+	}
+	
 	
 	
 	////////////////////////////////////////////////////////////////////////////
 	// COMMUNICATION
 	////////////////////////////////////////////////////////////////////////////
-	/*
-	public void receiveMessage(){
-		try{
-			// TODO: implement message received event and handle it accordingly.
-		}
-		catch(MqttException mE){
-			JOptionPane.showMessageDialog(
-					null,
-					"MQTT message listener failed.",
-					"Event Error",
-					JOptionPane.ERROR_MESSAGE
-			);
-			
-			System.out.println("ERROR: Failed to send MQTT message.");
-			mE.printStackTrace();
-		}
+	
+	public void messageArrived(String topic, MqttMessage message) throws MqttException{
+		DebugGUI.setMessageReceivedText(new String(message.getPayload()));
+		
+		System.out.format("---------------------------------\nMESSAGE ARRIVED:\n" +
+				"Topic: %s\nMessage: %s\n---------------------------------\n",
+				topic, new String(message.getPayload()));
 	}
-	*/
-	public void sendMessage(String topic, MqttMessage message){
+	
+	public void sendMessage(String text){
 		try{
+			MqttMessage message = new MqttMessage(text.getBytes());
+			message.setQos(qos);
+			
 			client.publish(topic, message);
 		}
 		catch(MqttException mE){
@@ -239,6 +192,13 @@ public class Mqtt extends ConnectionClass{
 			System.out.println("ERROR: Failed to send MQTT message.");
 			mE.printStackTrace();
 		}
+	}
+	
+	public void deliveryComplete(IMqttDeliveryToken token){}
+	
+	public void connectionLost(Throwable cause) {
+		System.out.println("Connection lost because: " + cause);
+		Main.instance.mqttFailed();
 	}
 	
 }

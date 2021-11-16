@@ -5,7 +5,6 @@ import at.kaindorf.lua.LuaJ;
 import at.kaindorf.mqtt.Mqtt;
 import at.kaindorf.ui.DebugGUI;
 import lombok.Data;
-import org.eclipse.paho.client.mqttv3.MqttException;
 
 import javax.swing.*;
 import java.util.ArrayList;
@@ -87,7 +86,7 @@ public class Main{
 				scripts.add("gui.lua");
 			}
 			
-			
+			// execute scripts
 			for(String script : scripts){
 				System.out.format("executing script '%s'... ", script);
 				LuaJ.executeLuaScript(script, luaObjects);
@@ -95,18 +94,22 @@ public class Main{
 			}
 		}
 		catch(Exception e){
-			if(debugWindow)
+			String message = "Failed to boot application, aborting...";
+			if(debugWindow){
 				JOptionPane.showMessageDialog(
 						null,
-						"Failed to execute startup scripts, aborting...",
-						"Setup Error",
+						message,
+						"",
 						JOptionPane.ERROR_MESSAGE
 				);
+			}
+			System.out.println("FATAL: " + message);
+			System.out.println(e.toString());
 			
-			System.out.println("FATAL: Failed to execute boot scripts, aborting...");
-			e.printStackTrace();
 			System.exit(1);
 		}
+		
+		if(debugWindow) debugFrame.init();
 	}
 	
 	/**
@@ -115,12 +118,42 @@ public class Main{
 	public static void reset(){
 		// disconnect database if necessary
 		if(db != null){
-			db.disconnect();
+			try{
+				db.disconnect();
+			}
+			catch(Exception e){
+				String message = "Failed to disconnect database while performing reset, skipping...";
+				if(Main.debugWindow){
+					JOptionPane.showMessageDialog(
+							null,
+							message,
+							"Influx Connection Error",
+							JOptionPane.ERROR_MESSAGE
+					);
+				}
+				System.out.println("WARNING: " + message);
+				System.out.println(e.toString());
+			}
 		}
 		
 		// disable MQTT if necessary
 		if(mqtt != null){
-			mqtt.disconnect();
+			try{
+				mqtt.disconnect();
+			}
+			catch(Exception e){
+				String message = "Failed to disconnect MQTT client while performing reset, skipping...";
+				if(Main.debugWindow){
+					JOptionPane.showMessageDialog(
+							null,
+							message,
+							"MQTT Connection Error",
+							JOptionPane.ERROR_MESSAGE
+					);
+				}
+				System.out.println("WARNING: " + message);
+				System.out.println(e.toString());
+			}
 		}
 		
 		// close debugging window if necessary
@@ -132,6 +165,17 @@ public class Main{
 		db = null;
 		mqtt = null;
 		debugFrame = null;
+	}
+	
+	public void mqttFailed(){
+		debugFrame.setMqttState(false);
+		
+		JOptionPane.showMessageDialog(
+				null,
+				"MQTT Connection lost.",
+				"MQTT Connection Error",
+				JOptionPane.ERROR_MESSAGE
+		);
 	}
 	
 	/**
