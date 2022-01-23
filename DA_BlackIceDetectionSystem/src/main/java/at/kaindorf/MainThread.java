@@ -1,5 +1,7 @@
 package at.kaindorf;
 
+import java.util.Scanner;
+
 /**
  * If the debugging window is disabled, we'll need a Thread to keep the console
  * running. I decided to export this part into its own class to that, if the
@@ -7,27 +9,33 @@ package at.kaindorf;
  * 
  * @author Nico Baumann
  */
-public class MainThread /*extends Thread*/{
+public class MainThread implements Runnable{
 	
-	////////////////////////////////////////////////////////////////////////////
-	//
-	//  THIS CLASS IS CURRENTLY DISABLED FOR SIMPLICITY PURPOSES, DO NOT MODIFY!
-	//
-	////////////////////////////////////////////////////////////////////////////
-	/*
-	public void discard(){
-		
-	}
+	private final Scanner SCANNER = new Scanner(System.in);
 	
 	@Override
 	public void run(){
 		try{
-			init();
-			loop();
+			do{
+				String s = SCANNER.nextLine();
+				
+				switch(s.toLowerCase().trim())
+				{
+					case "exit":
+						System.exit(0);
+						break;
+						
+					default:
+						System.out.println("Unknown Command.");
+						break;
+						
+					// lua not working right, lua command temporarily removed.
+				}
+			} while(true); // endless loop; good enough for now
 		}
 		catch(Exception e){
 			e.printStackTrace();
 		}
 	}
-	*/
+	
 }

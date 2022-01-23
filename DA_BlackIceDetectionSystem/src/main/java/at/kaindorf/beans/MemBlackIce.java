@@ -9,18 +9,18 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * A POJOs Memory object to store query results from our main measurement {@code black_ice}.
+ * A Memory object to store query results from the main measurement {@code black_ice}.
  * 
  * @author Nico Baumann
  */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Measurement(name = "black_ice")
+@Measurement(name = "black_ice") // Defines measurement to use. Since we only have one we will just hardcode it.
 public class MemBlackIce{
 	
 	@Column(name = "time")
-	private Instant time;
+	private Instant time; // InfluxDB timestamp of entry.
 	
 	@Column(name = "temperature")
 	private Float temperature;
@@ -33,5 +33,8 @@ public class MemBlackIce{
 	
 	@Column(name = "light_level")
 	private Float light_level;
+	
+	@Column(name = "buffer")
+	private Long buffer; // Buffer to read/write data with.
 	
 }

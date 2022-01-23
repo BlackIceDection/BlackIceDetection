@@ -7,24 +7,34 @@ import at.kaindorf.ui.DebugGUI;
 import lombok.Data;
 
 import javax.swing.*;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
 @Data
+/**
+ * The Main class of this project.
+ * Uses its own thread to keep running, even without GUI.
+ */
 public class Main{
 	
-	// instance for Lua only
-	public static Main instance;
+	// main thread running command line args
+	private static MainThread mainThread;
+	
+	public static Main instance; // Instance of this class, only relevant for Lua.
 	
 	// whether it has already loaded the main lua script
 	public static boolean firstRun = true;
 	
 	// whether to show the debugging window
-	public static boolean debugWindow;
+	public static boolean debugWindow = true;
 	// the actual debugging window
 	public static DebugGUI debugFrame = null;
+	
+	// Lua scripts location
+	public static String loc_lua = "";
 	
 	// Lua scripts that should be executed after 'boot.lua'
 	private String[] chainScripts;
@@ -34,11 +44,21 @@ public class Main{
 	// MQTT client/sender/receiver instance
 	private static Mqtt mqtt;
 	
-	public static void main(String[] args) throws Exception{
+	public static void main(String[] args){
 		instance = new Main();
+		
+		// locate lua scripts
+		// code to read a .properties file removed, just force the user
+		// to have the scripts folder in the working directory of the program.
+		// path is defined in at.kaindorf.lua.LuaJ.java
 		
 		// just use the reload method to initialize everything needed
 		instance.reload();
+		
+		if(debugWindow){
+			System.out.println("Program started. Type 'exit' to shutdown.");
+			mainThread = new MainThread();
+		}
 	}
 	
 	

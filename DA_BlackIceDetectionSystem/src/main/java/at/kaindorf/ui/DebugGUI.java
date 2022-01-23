@@ -1,20 +1,36 @@
 package at.kaindorf.ui;
 
 import at.kaindorf.Main;
+import at.kaindorf.db.Base64Handler;
 import at.kaindorf.db.Database;
+import at.kaindorf.db.ImageHandler;
 import at.kaindorf.mqtt.Mqtt;
+import com.influxdb.client.QueryApi;
+import com.influxdb.client.domain.WritePrecision;
+import com.influxdb.client.write.Point;
+import com.influxdb.query.FluxRecord;
+import com.influxdb.query.FluxTable;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * The debugging window class. Will be disabled in release, but speeds up development time.
+ * The debugging window. Only used for, well, debugging. Disabled in the final product.
+ * 
+ * @author Nico Baumann
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
@@ -24,10 +40,11 @@ public class DebugGUI extends JFrame{
 	public static JFrame frame = null;
 	
 	// layouts
-	private GridLayout lyMainGrid, lyMqtt;
+	private GridLayout lyMainGrid, lyParams, lyMqtt;
 	
 	// panels
-	private JPanel paMqtt;
+	private JPanel paMqtt, paParams;
+	private static ImagePanel paCamera;
 	
 	// buttons
 	private JButton btConnectInflux, btConnectMqtt;
@@ -43,8 +60,11 @@ public class DebugGUI extends JFrame{
 	private final Color COL_CONNECTED = new Color(0xAAFFAA);
 	
 	// get influx and MQTT instances
-	private Database db;
-	private Mqtt mqtt;
+	private static Database db;
+	private static Mqtt mqtt;
+	
+	// temp vars
+	public static float temp = 0, humid = 0, light = 0, air = 0;
 	
 	public DebugGUI(){
 		// set frame instance
@@ -52,15 +72,16 @@ public class DebugGUI extends JFrame{
 		
 		// set panel instances
 		paMqtt = new JPanel();
+		paParams = new JPanel();
+		paCamera = new ImagePanel(null);
 		
 		// set button instances
 		btConnectInflux = new JButton();
 		btConnectMqtt = new JButton();
+		
 		// set label instances
 		lbInflux = new JLabel();
 		lbMqtt = new JLabel();
-		
-		// set label instances
 		lbInflux = new JLabel();
 		lbMqtt = new JLabel();
 		lbOutput = new JLabel();
@@ -86,18 +107,23 @@ public class DebugGUI extends JFrame{
 		
 		//      configure layout
 		// create grid layout
-		lyMainGrid = new GridLayout(4, 1);
+		lyMainGrid = new GridLayout(1, 2);
+		lyParams = new GridLayout(4, 1);
 		lyMqtt = new GridLayout(1, 2);
 		
 		// apply layouts
 		frame.setLayout(lyMainGrid);
+		paParams.setLayout(lyParams);
 		paMqtt.setLayout(lyMqtt);
 		
 		// add components
-		frame.add(btConnectInflux);
-		frame.add(lbInflux);
-		frame.add(btConnectMqtt);
-		frame.add(paMqtt);
+		frame.add(paParams);
+		frame.add(paCamera);
+		
+		paParams.add(btConnectInflux);
+		paParams.add(lbInflux);
+		paParams.add(btConnectMqtt);
+		paParams.add(paMqtt);
 		
 		paMqtt.add(lbMqtt);
 		paMqtt.add(lbOutput);
@@ -139,10 +165,49 @@ public class DebugGUI extends JFrame{
 		}
 		
 		lbMqtt.setText(mqtt.getConnectionString(true));
+		
+		/*if(connected){
+			setMessageReceivedText("Current off-chip sensor temperature = 29 Celsius\n" +
+					"Current onboard sensor brightness = 151 Lux\n" +
+					"Current onboard sensor temperature = 30 Celsius\n" +
+					"Current onboard sensor humidity = 27 %\n" +
+					"Current barometer temperature = 33 Celsius\n" +
+					"Current barometer pressure = 99421 pascal\n" +
+					"Live body detected within 5 seconds!");
+		}*/
 	}
 	
 	public void setMqttState(boolean state){
 		changeMqttButtonVisuals(state);
+	}
+	
+	private void dbTestQuery(){
+		String fluxQuery = String.format(
+				"from(bucket: \"%s\")\n" +
+				"  |> range(start: '%s', stop: '%s')\n" +
+				"  |> filter(fn: (r) => r[\"_measurement\"] == \"%s\")\n" +
+				"  |> filter(fn: (r) => r[\"_field\"] == \"temperature\" or r[\"_field\"] == \"humidity\" or r[\"_field\"] == \"light_level\" or r[\"_field\"] == \"air_pressure\")\n" +
+				//"  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n" +
+				"  |> yield(name: \"mean\")",
+				db.getBucket(),
+				"2021-11-18T08:40:00Z",
+				"2021-11-18T09:40:00Z",
+				db.getMeasurement()
+		);
+		
+		QueryApi qApi = db.getClient().getQueryApi();
+		
+		List<FluxTable> tables = qApi.query(fluxQuery);
+		
+		System.out.println("=================== QUERY RESULTS ===================");
+		for(FluxTable table : tables){
+			List<FluxRecord> records = table.getRecords();
+			
+			for(FluxRecord record : records){
+				System.out.println(record.getTime() + ": " + record.getValueByKey("temperature"));
+			}
+		}
+		System.out.println("=====================================================");
 	}
 	
 	private void setEvents(){
@@ -162,6 +227,8 @@ public class DebugGUI extends JFrame{
 						changeInfluxButtonVisuals(true);
 						
 						System.out.println("success!");
+						
+						//dbTestQuery();
 					}
 					catch(Exception e){
 						String message = "Failed to establish database connection.";
@@ -175,6 +242,7 @@ public class DebugGUI extends JFrame{
 						}
 						System.out.println("ERROR: " + message);
 						System.out.println(e.toString());
+						//e.printStackTrace();
 						
 						changeInfluxButtonVisuals(false);
 					}
@@ -219,7 +287,7 @@ public class DebugGUI extends JFrame{
 					
 					try{
 						// create client
-						mqtt.connect();
+						mqtt.connect(null);
 						
 						// change button visuals
 						changeMqttButtonVisuals(true);
@@ -301,8 +369,114 @@ public class DebugGUI extends JFrame{
 		});
 	}
 	
+	/**
+	 * Sets the received MQTT message (with database related values) to label.
+	 * @param text The text to display
+	 */
 	public static void setMessageReceivedText(String text){
-		lbOutput.setText("<html>" + text.replace("\n", "</br>") + "</html>");
+		String[] lines = text.toLowerCase().split("\n");
+		
+		for(String line : lines){
+			if(line.contains("temperature")){
+				if(line.contains("off-chip")){
+					temp = (float)locateNumber(line);
+				}
+				else{
+					continue;
+				}
+			}
+			
+			if(line.contains("brightness"))
+				light = (float)locateNumber(line);
+			
+			if(line.contains("humidity"))
+				humid = (float)locateNumber(line);
+			
+			if(line.contains("pressure"))
+				air = (float)locateNumber(line);
+		}
+		
+		lbOutput.setText(String.format(
+				"<html>" +
+				"Timestamp: %s <br/>" +
+				"<br/>" +		
+				"Temperature: %.1f °C <br/>" +
+				"Humidity: %.1f Percent <br/>" +
+				"Light Level: %.1f Lux <br/>" +
+				"Air Pressure: %.1f Pa" +
+				"</html>",
+				LocalDateTime.now(),
+				temp, humid, light, air
+		));
+		
+		if(temp < 4)
+			System.out.println("WARNING: Temperature below 4°C, black ice might be present!");
+		
+		//addToDb(temp, humid, air, light);
+	}
+	
+	/**
+	 * Displays the output of the camera to a dedicated label.
+	 * @param pngBase64 The camera image as Base64 string
+	 */
+	public static void setCameraOutput(String pngBase64){
+		byte[] pngData = Base64Handler.decodeToByteArr(pngBase64);
+		
+		InputStream is = new ByteArrayInputStream(pngData);
+		BufferedImage image = null;
+		
+		try{
+			image = ImageIO.read(is);
+			is.close();
+		}
+		catch(IOException ioE){
+			throw new RuntimeException("Failed to read received image.");
+		}
+		
+		paCamera.setImage(ImageHandler.getBufferedImage(
+				image.getScaledInstance(800, 600, Image.SCALE_SMOOTH)
+		));
+		
+		//addToDb(pngBase64);
+	}
+	
+	private static void addToDb(float temp, float humid, float air, float light){
+		Point p = Point
+				.measurement("black_ice")
+				.addField("temperature", temp)
+				.addField("humidity", humid)
+				.addField("air_pressure", air)
+				.addField("light_level", light)
+				.time(Instant.now(), WritePrecision.NS);
+		
+		db.writeDataPoint(p);
+	}
+	private static void addToDb(String image64){
+		/*Point p = Point
+				.measurement("black_ice")
+				.addField("temperature", temp)
+				.addField("humidity", humid)
+				.addField("air_pressure", air)
+				.addField("light_level", light)
+				.time(Instant.now(), WritePrecision.NS);
+		
+		db.writeDataPoint(p);*/
+	}
+	
+	private static int locateNumber(String s){
+		String[] parts = s.split(" ");
+		
+		for(int i = 0; i < parts.length; i++){
+			try{
+				int num = Integer.parseInt(parts[i]);
+				return num;
+			}
+			catch(NumberFormatException nfE){
+				continue;
+			}
+		}
+		
+		return -1;
 	}
 	
 }
