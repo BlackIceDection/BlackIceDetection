@@ -1,4 +1,3 @@
-from asyncio.windows_events import NULL
 import smbus
 import sys
 import paho.mqtt.client as mqtt
