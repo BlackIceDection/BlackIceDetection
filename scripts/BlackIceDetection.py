@@ -1,3 +1,4 @@
+from asyncio.windows_events import NULL
 import smbus
 import sys
 import paho.mqtt.client as mqtt
@@ -27,11 +28,11 @@ BMP280_PRESSURE_REG_M = 0x0A
 BMP280_PRESSURE_REG_H = 0x0B
 BMP280_STATUS = 0x0C
 HUMAN_DETECT = 0x0D
-MQTT_IP = "192.168.0.101"
+MQTT_IP = "192.168.43.4"
 
 i2c = busio.I2C(board.SCL, board.SDA, frequency=400000) # setup I2C
 mlx = adafruit_mlx90640.MLX90640(i2c) # begin MLX90640 with I2C comm
-mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_16_HZ # set refresh rate
+mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_1_HZ # set refresh rate
 mlx_shape = (24,32) # mlx90640 shape
 mlx_interp_val = 10 # interpolate # on each dimension
 mlx_interp_shape = (mlx_shape[0]*mlx_interp_val,
@@ -48,6 +49,7 @@ def readSensorData():
     bus = smbus.SMBus(DEVICE_BUS)
     aReceiveBuf = []
     aReceiveBuf.append(0x00)
+
     for i in range(TEMP_REG, HUMAN_DETECT + 1):
         aReceiveBuf.append(bus.read_byte_data(DEVICE_ADDR, i))
     if aReceiveBuf[STATUS_REG] & 0x01:
@@ -82,14 +84,15 @@ def readSensorData():
     else:
         print("No humans detected!")
     sys.stdout = sys.__stdout__
-	
+
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     client.subscribe("$SYS/#")
-	
+
+
 # Publishes every 10 second the Data read from the sensors
 def on_message(client, userdata, msg):
     readSensorData()
@@ -98,9 +101,11 @@ def on_message(client, userdata, msg):
     with open("thermalcam.png", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read())
     publish.single("temperature", txt, hostname=MQTT_IP)
-    publish.single("Schwarzi", encoded_string, hostname=MQTT_IP)
-    time.sleep(10)
-	
+    publish.single("temperature", encoded_string, hostname=MQTT_IP)
+    os.remove('output.txt')
+    os.remove('thermalcam.png')
+    time.sleep(5)
+
 def readThermalData():
     cbar.set_label('Temperature [$^{\circ}$C]',fontsize=14) # colorbar label
     fig.canvas.draw() # draw figure to copy background
@@ -118,7 +123,7 @@ def readThermalData():
     fig.canvas.blit(ax.bbox) # draw background
     #fig.canvas.flush_events() # show the new image
     fig.savefig('thermalcam.png', dpi=300, facecolor='#FCFCFC')
-	
+
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
