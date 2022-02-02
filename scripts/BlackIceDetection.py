@@ -35,12 +35,12 @@ mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_1_HZ # set refresh rate
 mlx_shape = (24,32) # mlx90640 shape
 mlx_interp_val = 10 # interpolate # on each dimension
 mlx_interp_shape = (mlx_shape[0]*mlx_interp_val,
-                    mlx_shape[1]*mlx_interp_val) # new shape
+                mlx_shape[1]*mlx_interp_val) # new shape
 fig = plt.figure(figsize=(12,9)) # start figure
 ax = fig.add_subplot(111) # add subplot
 fig.subplots_adjust(0.05,0.05,0.95,0.95) # get rid of unnecessary padding
 therm1 = ax.imshow(np.zeros(mlx_interp_shape),interpolation='none',
-                cmap=plt.cm.bwr,vmin=25,vmax=45) # preemptive image
+            cmap=plt.cm.bwr,vmin=25,vmax=45) # preemptive image
 cbar = fig.colorbar(therm1) # setup colorbar
 
 def readSensorData():
