@@ -91,7 +91,6 @@ def on_connect(client, userdata, flags, rc):
     # reconnect then subscriptions will be renewed.
     client.subscribe("$SYS/#")
 
-
 # Publishes every 10 second the Data read from the sensors
 def on_message(client, userdata, msg):
     readSensorData()
@@ -99,8 +98,8 @@ def on_message(client, userdata, msg):
     txt = open('output.txt').read()
     with open("thermalcam.png", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read())
+        txt = txt + 'picture = ' + encoded_string.decode('utf-8')
     publish.single("temperature", txt, hostname=MQTT_IP)
-    publish.single("temperature", encoded_string, hostname=MQTT_IP)
     os.remove('output.txt')
     os.remove('thermalcam.png')
     time.sleep(5)
@@ -123,8 +122,10 @@ def readThermalData():
     #fig.canvas.flush_events() # show the new image
     fig.savefig('thermalcam.png', dpi=300, facecolor='#FCFCFC')
 
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
-client.connect(MQTT_IP, 1883, 60)
-client.loop_forever()
+ 
+if __name__ == '__main__':
+    client = mqtt.Client()
+    client.on_connect = on_connect
+    client.on_message = on_message
+    client.connect(MQTT_IP, 1883, 60)
+    client.loop_forever()
