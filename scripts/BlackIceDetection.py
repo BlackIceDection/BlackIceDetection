@@ -2,7 +2,6 @@ import smbus
 import sys
 import paho.mqtt.client as mqtt
 import paho.mqtt.publish as publish
-import time
 from pathlib import Path
 import time,board,busio
 import numpy as np
