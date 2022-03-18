@@ -11,7 +11,7 @@ print "+------------------+"
 
 
 -- Whether to show the debugging window
---local show_debug_window = true
+local show_debug_window = false
 
 -- Lua scripts to execute right after this script
 local other_scripts = {
