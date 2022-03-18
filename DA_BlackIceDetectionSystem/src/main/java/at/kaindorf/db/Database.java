@@ -15,17 +15,19 @@ import java.util.List;
 /**
  * This class handles everything about the database itself and its connection.
  * It's also responsible for reading/writing InfluxDB data.
- * 
+ *
  * @author Nico Baumann
  */
 @Data
 public class Database{
-	
+
 	private static Database instance = null; // Instance of this class
-	public static boolean firstRun = true; // Soft reload, used for Lua.
-	
+	public static boolean firstRun = true; // Soft reload, was used for Lua.
+
+	public boolean isConnected = false;
+
 	private InfluxDBClient client = null; // InfluxDB client
-	
+
 	private String url;         // Database URL.
 	private String username;    // Username of user (admin).
 	private String password;    // Password of user (admin).
@@ -33,7 +35,7 @@ public class Database{
 	private String token;       /** Private access token for database connection. Value in {@code db.lua}.*/
 	private String bucket;      // Influx-Bucket.
 	private String measurement; // Measurement for sending/receiving data from Influx.
-	
+
 	/**
 	 * Instance handler.
 	 * @return Instance of this class.
@@ -42,7 +44,7 @@ public class Database{
 		if(instance == null) instance = new Database(); // If there's no instance yet, create one.
 		return instance;
 	}
-	
+
 	/**
 	 * Sets up first-time database connection.
 	 */
@@ -53,27 +55,31 @@ public class Database{
 		 */
 		reset();
 	}
-	
+
 	/**
 	 * Establishes connection to InfluxDB.
 	 */
 	public void connect() throws Exception{
 		// Create new client that connects to Influx via URL and the private access token.
 		client = InfluxDBClientFactory.create(url, token.toCharArray());
+
+		isConnected = true;
 	}
-	
+
 	/**
 	 * Closes the database connection and frees resources.
 	 */
 	public void disconnect() throws Exception{
 		// If client has already been created, close the connection.
-		if(client != null)
+		if(client != null){
 			client.close();
+			isConnected = false;
+		}
 		// Otherwise, throw an exception, just for fun.
 		else
 			throw new RuntimeException("No client present");
 	}
-	
+
 	/**
 	 * Reloads Lua scripts.
 	 */
@@ -85,7 +91,7 @@ public class Database{
 			}
 		});
 	}
-	
+
 	/**
 	 * Resets all variables and connections.
 	 */
@@ -95,11 +101,12 @@ public class Database{
 			client.close();
 			client = null;
 		}
-		
+
 		// Reset all relevant variables.
 		url = username = password = token = bucket = org = "NaN";
+		isConnected = false;
 	}
-	
+
 	/**
 	 * Returns a string containing information about the database (connection).
 	 * Only for debugging purposes.
@@ -122,25 +129,25 @@ public class Database{
 						url, username, bucket, org
 				);
 		}
-		
+
 		return "Not connected.";
 	}
-	
-	
-	
+
+
+
 	////////////////////////////////////////////////////////////////////////////
 	// COMMUNICATION
 	////////////////////////////////////////////////////////////////////////////
-	
+
 	/*
 	 * We have the following data:
 	 *  - Air Pressure (Field Key) - type Float
 	 *  - Inner Temperature (Field Key) - type Float
-	 *  - Outer Temperature (Field Key) - type Float 
+	 *  - Outer Temperature (Field Key) - type Float
 	 *  - Humidity (Field Key) - type Float
 	 *  - Light (Field Key) - type Float
 	 */
-	
+
 	/**
 	 * Writes data to Influx directly via InfluxDB's Line Protocol.
 	 * Untested because we found a better way to do it, but still leaving this in just because.
@@ -151,7 +158,7 @@ public class Database{
 			wapi.writeRecord(bucket, org, WritePrecision.NS, in);
 		}
 	}
-	
+
 	/**
 	 * Writes data to Influx via Data Point.
 	 * This is the preferred (and easiest) way to write data to the database.
@@ -162,7 +169,7 @@ public class Database{
 			wapi.writePoint(bucket, org, point);
 		}
 	}
-	
+
 	/**
 	 * TODO: finally finish and test this.
 	 */
@@ -175,5 +182,5 @@ public class Database{
 		//List<FluxTable> tables = db.getClient().getQueryApi().query(query, db.getOrg());
 		return client.getQueryApi().query(query, org);
 	}
-	
+
 }
