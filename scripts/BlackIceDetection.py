@@ -107,7 +107,7 @@ def readThermalData():
     cbar.set_label('Temperature [$^{\circ}$C]',fontsize=14) # colorbar label
     fig.canvas.draw() # draw figure to copy background
     ax_background = fig.canvas.copy_from_bbox(ax.bbox) # copy background
-    fig.show() # show the figure before blitting
+    #fig.show() # show the figure before blitting
     frame = np.zeros(mlx_shape[0]*mlx_shape[1]) # 768 pts
     fig.canvas.restore_region(ax_background) # restore background
     mlx.getFrame(frame) # read mlx90640
